@@ -1,1 +1,6 @@
+Заполнение DM таблиц
 https://disk.yandex.ru/i/nU4GhrLWW2PJXA
+Описание процедуры DS.FILL_ACCOUNT_TURNOVER_F (ION_DATE DATE)
+https://disk.yandex.ru/i/bVImPW1imFvQmw
+Описание процедуры DS.FILL_ACCOUNT_BALANCE_F (I_ONDATE DATE)
+https://disk.yandex.ru/i/7bsIr10EbXw_aA
