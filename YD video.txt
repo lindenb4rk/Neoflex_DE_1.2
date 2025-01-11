@@ -4,3 +4,8 @@ https://disk.yandex.ru/i/nU4GhrLWW2PJXA
 https://disk.yandex.ru/i/bVImPW1imFvQmw
 Описание процедуры DS.FILL_ACCOUNT_BALANCE_F (I_ONDATE DATE)
 https://disk.yandex.ru/i/7bsIr10EbXw_aA
+
+---***---
+Для коррекции значений внутри ACCOUNT_TURNOVER_F
+Возможно использовать sql запрос находящийся в файле "Answer_1.2_1 UPDATE", там происходит замена NULL значений на 0
+---***---
