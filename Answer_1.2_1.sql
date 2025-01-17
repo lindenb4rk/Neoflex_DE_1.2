@@ -1,41 +1,6 @@
---drop PROCEDURE DS.FILL_ACCOUNT_TURNOVER_F
-/*
-DO $$
+--анонимный блок и логирование после процедуры
 
-declare 
-my_date date := '01-01-2018'; 
-begin
-
-insert into logs.logs_ds
-(etl_table, date_start, operation_status)
-values ('DM_ACCOUNT_TURNOVER',clock_timestamp()::TIME,7);
-
-for counter in 1..31 loop
-call DS.FILL_ACCOUNT_TURNOVER_F(my_date);
-raise notice '%' ,my_date;
-my_date = my_date + INTERVAL '1 day';
-end loop;
-UPDATE logs.logs_ds 
-SET
-DATE_END = NOW()::TIME,
-OPERATION_STATUS = 0,
-TIME_ETL = clock_timestamp()::TIME - DATE_START
-WHERE
-OPERATION_STATUS = 7;
-
-end $$ LANGUAGE PLPGSQL;
-
-
-
-
-
-select * from  DM.DM_ACCOUNT_TURNOVER_F;
-
-
-delete from DM.DM_ACCOUNT_TURNOVER_F;
-
-*/
---drop PROCEDURE DS.FILL_ACCOUNT_TURNOVER_F
+--требуемая процедура
 CREATE
 OR REPLACE PROCEDURE DS.FILL_ACCOUNT_TURNOVER_F (ION_DATE DATE) AS $$
 begin
@@ -149,3 +114,29 @@ insert into DM.DM_ACCOUNT_TURNOVER_F select * from dm.resulting;
 	end ;
 	
  $$ LANGUAGE PLPGSQL;
+
+ --анонимный блок и логирование
+DO $$
+declare 
+--здесь выставляется начальная дата
+my_date date := '01-01-2018'; 
+begin
+insert into logs.logs_ds
+(etl_table, date_start, operation_status)
+values ('DM_ACCOUNT_TURNOVER',clock_timestamp()::TIME,7);
+
+--заполнение данных согласно ТЗ, по одному дню
+for counter in 1..31 loop
+call DS.FILL_ACCOUNT_TURNOVER_F(my_date);
+raise notice '%' ,my_date;
+my_date = my_date + INTERVAL '1 day';
+end loop;
+UPDATE logs.logs_ds 
+SET
+DATE_END = NOW()::TIME,
+OPERATION_STATUS = 0,
+TIME_ETL = clock_timestamp()::TIME - DATE_START
+WHERE
+OPERATION_STATUS = 7;
+
+end $$ LANGUAGE PLPGSQL;
