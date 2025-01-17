@@ -1,37 +1,6 @@
-/*
+--анонимный блок и логирование в самом низу
 
-delete from DM.DM_ACCOUNT_BALANCE_F;
-
-select * from DM.DM_ACCOUNT_BALANCE_F;
-
-
-DO $$
-
-declare 
-my_date date := '01-01-2018'; 
-begin
-
-insert into logs.logs_ds
-(etl_table, date_start, operation_status)
-values ('DM_ACCOUNT_BALANCE_F',clock_timestamp()::TIME,8);
-
-
-for counter in 1..31 loop
-call ds.fill_account_balance_f(my_date);
-raise notice '%' ,my_date;
-my_date = my_date + INTERVAL '1 day';
-
-end loop;
-
-UPDATE logs.logs_ds 
-SET
-DATE_END = NOW()::TIME,
-OPERATION_STATUS = 0,
-TIME_ETL = clock_timestamp()::TIME - DATE_START
-WHERE
-OPERATION_STATUS = 8;
-end $$ LANGUAGE PLPGSQL;
-*/
+--заполнение данных за 31-12-2017, согласно ТЗ
 INSERT INTO
 	DM.DM_ACCOUNT_BALANCE_F
 SELECT DISTINCT
@@ -49,26 +18,70 @@ FROM
 WHERE
 	FT."ON_DATE" = '2017-12-31';
 
---delete from DM.DM_ACCOUNT_BALANCE_F;
+--требуемая процедура
 CREATE
 OR REPLACE PROCEDURE DS.FILL_ACCOUNT_BALANCE_F (I_ONDATE DATE) AS $$
 begin
-insert into DM.DM_ACCOUNT_BALANCE_F
-SELECT distinct i_ondate,
-	acc_b.ACCOUNT_RK,
-	case when acc."CHAR_TYPE" ='П' then coalesce(acc_b_ld.BALANCE_OUT,0) +coalesce(acc_tur.credit_amount,0)- coalesce(acc_tur.debet_amount,0)  
-	when acc."CHAR_TYPE" ='А' then coalesce(acc_b_ld.BALANCE_OUT,0) + coalesce(acc_tur.debet_amount,0) -  coalesce(acc_tur.credit_amount,0)
-	else acc_b_ld.BALANCE_OUT
-	end as new_balance,
-	case when acc."CHAR_TYPE" ='П' then  coalesce((coalesce(acc_b_ld.BALANCE_OUT,0) +coalesce(acc_tur.credit_amount,0)- coalesce(acc_tur.debet_amount,0))*exc."REDUCED_COURCE",(coalesce(acc_b_ld.BALANCE_OUT,0) +coalesce(acc_tur.credit_amount,0)- coalesce(acc_tur.debet_amount,0))*1)  
-	when acc."CHAR_TYPE" ='А' then coalesce((coalesce(acc_b_ld.BALANCE_OUT,0) + coalesce(acc_tur.debet_amount,0) -  coalesce(acc_tur.credit_amount,0))*exc."REDUCED_COURCE",(coalesce(acc_b_ld.BALANCE_OUT,0) + coalesce(acc_tur.debet_amount,0) -  coalesce(acc_tur.credit_amount,0))*1)
-	else acc_b_ld.BALANCE_OUT_RUB
-	end as new_balance_rub
-	FROM DM.DM_ACCOUNT_BALANCE_F as acc_b
-	join ds.md_account_d as acc
-	on acc_b.ACCOUNT_RK = acc."ACCOUNT_RK" and i_ondate between acc."DATA_ACTUAL_DATE" and acc."DATA_ACTUAL_END_DATE" 
-	left join ds.md_exchange_rate_d as exc on acc."CURRENCY_RK" = exc."CURRENCY_RK" and i_ondate between exc."DATA_ACTUAL_DATE" and exc."DATA_ACTUAL_END_DATE"
-	left join DM.DM_ACCOUNT_BALANCE_F as  acc_b_ld on acc_b.ACCOUNT_RK = acc_b_ld.ACCOUNT_RK and acc_b_ld.ON_DATE = ( i_ondate - interval '1 day')
-	left join dm.DM_ACCOUNT_TURNOVER_F as acc_tur on acc_tur.account_rk = acc_b.ACCOUNT_RK and  i_ondate = acc_tur.on_date;
-		end ;
+INSERT INTO DM.DM_ACCOUNT_BALANCE_F
+SELECT DISTINCT
+	I_ONDATE,
+	ACC_B.ACCOUNT_RK,
+	CASE
+		WHEN ACC."CHAR_TYPE" = 'П' THEN COALESCE(ACC_B_LD.BALANCE_OUT, 0) + COALESCE(ACC_TUR.CREDIT_AMOUNT, 0) - COALESCE(ACC_TUR.DEBET_AMOUNT, 0)
+		WHEN ACC."CHAR_TYPE" = 'А' THEN COALESCE(ACC_B_LD.BALANCE_OUT, 0) + COALESCE(ACC_TUR.DEBET_AMOUNT, 0) - COALESCE(ACC_TUR.CREDIT_AMOUNT, 0)
+		ELSE ACC_B_LD.BALANCE_OUT
+	END AS NEW_BALANCE,
+	CASE
+		WHEN ACC."CHAR_TYPE" = 'П' THEN COALESCE(
+			(
+				COALESCE(ACC_B_LD.BALANCE_OUT, 0) + COALESCE(ACC_TUR.CREDIT_AMOUNT, 0) - COALESCE(ACC_TUR.DEBET_AMOUNT, 0)
+			) * EXC."REDUCED_COURCE",
+			(
+				COALESCE(ACC_B_LD.BALANCE_OUT, 0) + COALESCE(ACC_TUR.CREDIT_AMOUNT, 0) - COALESCE(ACC_TUR.DEBET_AMOUNT, 0)
+			) * 1
+		)
+		WHEN ACC."CHAR_TYPE" = 'А' THEN COALESCE(
+			(
+				COALESCE(ACC_B_LD.BALANCE_OUT, 0) + COALESCE(ACC_TUR.DEBET_AMOUNT, 0) - COALESCE(ACC_TUR.CREDIT_AMOUNT, 0)
+			) * EXC."REDUCED_COURCE",
+			(
+				COALESCE(ACC_B_LD.BALANCE_OUT, 0) + COALESCE(ACC_TUR.DEBET_AMOUNT, 0) - COALESCE(ACC_TUR.CREDIT_AMOUNT, 0)
+			) * 1
+		)
+		ELSE ACC_B_LD.BALANCE_OUT_RUB
+	END AS NEW_BALANCE_RUB
+FROM
+	DM.DM_ACCOUNT_BALANCE_F AS ACC_B
+	JOIN DS.MD_ACCOUNT_D AS ACC ON ACC_B.ACCOUNT_RK = ACC."ACCOUNT_RK"
+	AND I_ONDATE BETWEEN ACC."DATA_ACTUAL_DATE" AND ACC."DATA_ACTUAL_END_DATE"
+	LEFT JOIN DS.MD_EXCHANGE_RATE_D AS EXC ON ACC."CURRENCY_RK" = EXC."CURRENCY_RK"
+	AND I_ONDATE BETWEEN EXC."DATA_ACTUAL_DATE" AND EXC."DATA_ACTUAL_END_DATE"
+	LEFT JOIN DM.DM_ACCOUNT_BALANCE_F AS ACC_B_LD ON ACC_B.ACCOUNT_RK = ACC_B_LD.ACCOUNT_RK
+	AND ACC_B_LD.ON_DATE = (I_ONDATE - INTERVAL '1 day')
+	LEFT JOIN DM.DM_ACCOUNT_TURNOVER_F AS ACC_TUR ON ACC_TUR.ACCOUNT_RK = ACC_B.ACCOUNT_RK
+	AND I_ONDATE = ACC_TUR.ON_DATE;		end ;
  $$ LANGUAGE PLPGSQL;
+
+ --анонимный блок для заполнения данных за январь + логирование
+DO $$
+declare 
+my_date date := '01-01-2018'; 
+begin
+insert into logs.logs_ds
+(etl_table, date_start, operation_status)
+values ('DM_ACCOUNT_BALANCE_F',clock_timestamp()::TIME,8);
+--проходит каждый день, заполняя процедуру и для наглядности выводит что данный день прошёл
+for counter in 1..31 loop
+call ds.fill_account_balance_f(my_date);
+raise notice '%' ,my_date;
+my_date = my_date + INTERVAL '1 day';
+end loop;
+
+UPDATE logs.logs_ds 
+SET
+DATE_END = NOW()::TIME,
+OPERATION_STATUS = 0,
+TIME_ETL = clock_timestamp()::TIME - DATE_START
+WHERE
+OPERATION_STATUS = 8;
+end $$ LANGUAGE PLPGSQL;
